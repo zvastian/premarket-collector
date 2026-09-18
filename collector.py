@@ -212,8 +212,9 @@ def run(min_snapshots):
         time.sleep(POLL_INTERVAL_SECONDS)
 
     snapshots, _ = count_snapshots(csv_path)
-    if csv_path.exists():
-        git_push(csv_path, f"data: {trade_date} completo ({snapshots} snapshots)")
+    if csv_path.exists() and not git_push(csv_path, f"data: {trade_date} completo ({snapshots} snapshots)"):
+        log("FALLA: no se pudo subir el CSV del día al repo - los datos se pierden con el runner.")
+        return 1
 
     # Chequeo de salud: la ventana 06:40-09:30 cada 2 min da ~85 snapshots. Si quedaron muy
     # pocos, el job termina con error para que GitHub mande el email de "workflow failed" -
