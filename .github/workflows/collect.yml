@@ -1,0 +1,47 @@
+name: premarket-collect
+
+# Dos disparos en UTC porque GitHub cron no conoce horario de verano. El script decide según la
+# hora de NY (ver docstring de collector.py):
+#   10:20 UTC = 06:20 EDT / 05:20 EST  -> corrida principal (espera hasta las 06:40 ET)
+#   11:20 UTC = 07:20 EDT / 06:20 EST  -> respaldo: sale sola si la principal ya capturó el día
+# Se programan ~20 min antes del arranque real porque el cron de Actions suele llegar tarde.
+on:
+  schedule:
+    - cron: "20 10 * * 1-5"
+    - cron: "20 11 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      once:
+        description: "Solo un fetch de prueba (no escribe datos)"
+        type: boolean
+        default: true
+
+# Nunca dos colectores a la vez: el respaldo espera en cola a que termine la principal.
+concurrency:
+  group: premarket-collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: git identity
+        run: |
+          git config user.name "premarket-collector[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: fetch de prueba
+        if: github.event_name == 'workflow_dispatch' && inputs.once
+        run: python collector.py --once
+      - name: colector
+        if: github.event_name == 'schedule' || !inputs.once
+        run: python collector.py
